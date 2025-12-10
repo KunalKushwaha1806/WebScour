@@ -168,6 +168,13 @@ def main():
     seed_url = "https://en.wikipedia.org/wiki/Infosys"
     MAX_PAGES = 5
 
+
+    # This basically gets the domain from the seed URL for reference 
+    # e.g., for "https://en.wikipedia.org/xyz", it gets "en.wikipedia.org"
+    # We can use this to restrict crawling to the same domain if needed.
+    seed_domain = urlparse(seed_url).netloc
+    print(f"[INFO] Seed domain: {seed_domain}")
+
     folder_name = "pages"
     if not os.path.exists(folder_name):
         os.mkdir(folder_name)
@@ -205,6 +212,9 @@ def main():
 
         # f. Add new links to queue
         for link in links:
+            link_domain = urlparse(link).netloc # This gets the domain of the link
+            if link_domain != seed_domain: # Restrict to same domain
+                continue
             if link not in visited and link not in queue:
                 queue.append(link)
 
