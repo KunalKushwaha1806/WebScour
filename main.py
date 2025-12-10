@@ -226,6 +226,13 @@ def main():
     print("Duplicate links encountered:", duplicate_count)
     print(f"Total time: {total_time:.2f} sec")
     print(f"Average time per page: {avg_time:.2f} sec")
+    
+    # Save visited URLs to a file
+    visited_file = "visited.txt"
+    with open(visited_file, "w", encoding="utf-8") as f:
+        for v in sorted(visited):
+            f.write(v + "\n")
+    print(f"[INFO] Saved visited URLs to {visited_file}")
 
 
 if __name__ == "__main__":
