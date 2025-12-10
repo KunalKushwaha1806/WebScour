@@ -88,41 +88,39 @@ import os
 from urllib.parse import urljoin, urlparse, urldefrag
 
 
-
-def fetch_page(url):
+def fetch_page(url, max_retries=3): # takes url and max retries as input(this is additional parameter to control retries)
     """
     Tries to download the webpage at the given URL.
+    Retries a few times if there is a temporary error (network, timeout, etc.).
     Returns the HTML text if successful, otherwise returns None.
     """
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"[INFO] Fetching (attempt {attempt}/{max_retries}):{url}") # logging the attempt number
+            response = requests.get(
+                url,
+                timeout=5,
+                headers={"User-Agent": "WebScourCrawler/1.0"}
+            )
 
-    """
-    1.Try to open the webpage using requests.get().
-    2.Use a User-Agent so websites know it’s your crawler.
-    3.If the response is status 200, return the HTML text.
-    4.If the response is something else (404, 500, etc.), print an error and return None.
-    5.If any error happens while contacting the website (timeout, network error), print the error and return None.
-    """
-    try:
-        # Send a GET request to the website
-        response = requests.get(
-            url,
-            timeout=5,
-            headers={"User-Agent": "WebScourCrawler/1.0"}
-        )
+            if response.status_code == 200:
+                return response.text
+            else:
+                # For non-200 codes we don't retry (here we just report)
+                print(f"[ERROR] Status {response.status_code} for {url}") # As these are client/server errors, no point in retrying  
+                return None
 
-        # If the page loaded successfully (HTTP 200)
-        if response.status_code == 200:
-            return response.text
+        except Exception as error:
+            print(f"[ERROR] Problem while fetching {url}: {error}") # passing the error message before retrying , if possible 
 
-        # If the server responded but not with success
-        else:
-            print(f"[ERROR] Could not load page (status {response.status_code}): {url}")
-            return None
+            # If this was the last attempt, give up
+            if attempt == max_retries:
+                print(f"[ERROR] Giving up on {url} after {max_retries} attempts.")
+                return None
 
-    # Handles any problems during the request (timeout, connection issues, etc.)
-    except Exception as error:
-        print(f"[ERROR] Problem while fetching {url}: {error}")
-        return None
+            # Small delay before next retry
+            time.sleep(1)
+
     
 
 def extract_links(html, base_url):
@@ -166,7 +164,7 @@ def extract_links(html, base_url):
 
 def main():
     seed_url = "https://en.wikipedia.org/wiki/Infosys"
-    MAX_PAGES = 5
+    MAX_PAGES = 50
 
 
     # This basically gets the domain from the seed URL for reference 
