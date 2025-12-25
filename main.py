@@ -1,91 +1,10 @@
-'''
-Pseudo code 
-START
-
-1. Initialize:
-      queue = [seed_url]
-      visited = empty_set
-      page_id = 1
-
-2. WHILE queue is not empty AND pages_crawled < MAX_PAGES:
-
-      a. Take the next URL from queue (FIFO)
-      
-      b. IF URL is already in visited:
-             skip this URL and continue
-      
-      c. Fetch the HTML for the URL
-             IF fetching failed:
-                 skip and continue
-      
-      d. Save the HTML content to a file:
-             filename = "page_<page_id>.html"
-      
-      e. Extract all links from the HTML content
-      
-      f. FOR each extracted link:
-             IF link NOT in visited AND NOT already in queue:
-                   add link to queue
-      
-      g. Mark current URL as visited
-      
-      h. Increment page_id by 1
-      
-      i. Sleep for 0.5 seconds (to avoid server overload)
-
-3. END WHILE
-
-4. Print the total number of pages crawled
-
-END
-
-'''
-
-
-'''
-Explaination:
-
-1. Start with one URL
-Put the seed URL into a queue.
-Create an empty visited set.
-Set page_id = 1.
-
-2. Loop while you still have pages to crawl
-Take the first URL from the queue.
-If you already visited it → skip.
-
-3. Fetch the page
-Download the HTML.
-If download fails → skip.
-
-4. Save the HTML
-Store the HTML into a file like:
-page_1.html, page_2.html, etc.
-
-5. Extract links
-Get all <a href="..."> links from the HTML.
-
-6. Add new links to the queue
-Only add links that:
-are not visited
-not already in the queue
-
-7. Mark visited
-Add the current URL to visited.
-
-8. Increase counters
-page_id = page_id + 1
-Sleep 0.5 seconds so you don't overload websites.
-
-9. After loop ends
-Print how many pages you crawled.
-
-'''
 import requests 
+import pika
 from bs4 import BeautifulSoup
 import time
 import os 
 from urllib.parse import urljoin, urlparse, urldefrag
+
 
 
 def fetch_page(url, max_retries=3): # takes url and max retries as input(this is additional parameter to control retries)
