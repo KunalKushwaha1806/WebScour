@@ -1,21 +1,20 @@
-import requests 
+import requests
 import pika
 from bs4 import BeautifulSoup
 import time
-import os 
+import os
+import multiprocessing
 from urllib.parse import urljoin, urlparse, urldefrag
 
+# --------------------------------------------------
+# EXISTING FUNCTIONS (UNCHANGED)
+# --------------------------------------------------
 
-
-def fetch_page(url, max_retries=3): # takes url and max retries as input(this is additional parameter to control retries)
-    """
-    Tries to download the webpage at the given URL.
-    Retries a few times if there is a temporary error (network, timeout, etc.).
-    Returns the HTML text if successful, otherwise returns None.
-    """
+def fetch_page(url, max_retries=3):
     for attempt in range(1, max_retries + 1):
         try:
-            print(f"[INFO] Fetching (attempt {attempt}/{max_retries}):{url}") # logging the attempt number
+            print(f"[INFO] Fetching (attempt {attempt}/{max_retries}): {url}")
+
             response = requests.get(
                 url,
                 timeout=5,
@@ -25,144 +24,165 @@ def fetch_page(url, max_retries=3): # takes url and max retries as input(this is
             if response.status_code == 200:
                 return response.text
             else:
-                # For non-200 codes we don't retry (here we just report)
-                print(f"[ERROR] Status {response.status_code} for {url}") # As these are client/server errors, no point in retrying  
+                print(f"[ERROR] Status {response.status_code} for {url}")
                 return None
 
         except Exception as error:
-            print(f"[ERROR] Problem while fetching {url}: {error}") # passing the error message before retrying , if possible 
+            print(f"[ERROR] Problem while fetching {url}: {error}")
 
-            # If this was the last attempt, give up
             if attempt == max_retries:
-                print(f"[ERROR] Giving up on {url} after {max_retries} attempts.")
+                print(f"[ERROR] Giving up on {url}")
                 return None
 
-            # Small delay before next retry
             time.sleep(1)
 
-    
 
 def extract_links(html, base_url):
-    """
-    Extract only useful HTTP/HTTPS links from the page.
-    Skips: mailto:, javascript:, tel:, #section, etc.
-    """
     soup = BeautifulSoup(html, "html.parser")
     links = set()
 
     for tag in soup.find_all("a", href=True):
         href = tag["href"].strip()
 
-        # 1. Skip obviously useless hrefs
         if not href:
             continue
-        if href.startswith("#"):
-            continue
-        if href.startswith("mailto:"):
-            continue
-        if href.startswith("javascript:"):
-            continue
-        if href.startswith("tel:"):
+        if href.startswith(("#", "mailto:", "javascript:", "tel:")):
             continue
 
-        # 2. Make absolute URL
-        absolute = urljoin(base_url, href)   
+        absolute = urljoin(base_url, href)
+        absolute, _ = urldefrag(absolute)
 
-        # 3. Remove fragment (#section)
-        absolute, _ = urldefrag(absolute)  
-
-        # 4. Keep only http/https   ---> url have scheme , domain, path 
         parsed = urlparse(absolute)
-        if parsed.scheme not in ("http", "https"): # skips ftp://, file://, data:// etc.
+        if parsed.scheme not in ("http", "https"):
             continue
 
         links.add(absolute)
 
     return links
 
+# --------------------------------------------------
+# TASK 3 + TASK 4: WORKER LOGIC
+# --------------------------------------------------
 
-def main():
-    seed_url = "https://en.wikipedia.org/wiki/Infosys"
-    MAX_PAGES = 50
+visited = set()
+
+folder_name = "pages"
+if not os.path.exists(folder_name):
+    os.mkdir(folder_name)
 
 
-    # This basically gets the domain from the seed URL for reference 
-    # e.g., for "https://en.wikipedia.org/xyz", it gets "en.wikipedia.org"
-    # We can use this to restrict crawling to the same domain if needed.
-    seed_domain = urlparse(seed_url).netloc
-    print(f"[INFO] Seed domain: {seed_domain}")
+def worker_function(worker_id):
+    """
+    Each process runs this function.
+    worker_id helps identify which worker is crawling which URL.
+    """
 
-    folder_name = "pages"
-    if not os.path.exists(folder_name):
-        os.mkdir(folder_name)
+    def crawl_url_worker(ch, method, properties, body):
+        url = body.decode() # Decode bytes to string
+        print(f"[WORKER-{worker_id}] Crawling: {url}")
 
-    queue = [seed_url]
-    visited = set()
-    page_id = 1
-    pages_crawled = 0
-
-    duplicate_count = 0   # SIMPLE duplicate counter
-    start_time = time.time()
-
-    while queue and pages_crawled < MAX_PAGES:
-
-        url = queue.pop(0)
-
-        # b. Check for duplicates
         if url in visited:
-            duplicate_count += 1   #COUNT DUPLICATE HERE
-            continue
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            return
 
-        # c. Fetch page
         html = fetch_page(url)
         if html is None:
-            continue
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            return
 
-        # d. Save HTML
-        filename = os.path.join(folder_name, f"page_{page_id}.html")
+        filename = os.path.join(folder_name, f"{hash(url)}.html")
         with open(filename, "w", encoding="utf-8") as f:
             f.write(html)
-        print(f"[SAVED] {url} --> {filename}")
 
-        # e. Extract links
+        print(f"[WORKER-{worker_id}] Saved: {filename}")
+
         links = extract_links(html, url)
+        seed_domain = urlparse(url).netloc
 
-        # f. Add new links to queue
         for link in links:
-            link_domain = urlparse(link).netloc # This gets the domain of the link
-            if link_domain != seed_domain: # Restrict to same domain
-                continue
-            if link not in visited and link not in queue:
-                queue.append(link)
+            if urlparse(link).netloc == seed_domain:
+                ch.basic_publish(
+                    exchange="",
+                    routing_key="url_queue",
+                    body=link.encode()
+                )
 
-        # g. Mark visited
         visited.add(url)
-
-        # h. Update counters
-        page_id += 1
-        pages_crawled += 1
-
         time.sleep(0.5)
+        ch.basic_ack(delivery_tag=method.delivery_tag) # Acknowledge message processing complete
 
-    end_time = time.time()
-    total_time = end_time - start_time
-    avg_time = total_time / pages_crawled if pages_crawled > 0 else 0
+    connection = pika.BlockingConnection( # connect to RabbitMQ server
+        pika.ConnectionParameters(host="localhost") # connect to RabbitMQ server
+    )
+    channel = connection.channel() # create a channel
 
-    print("\n--- SUMMARY ---")
-    print("Total pages crawled:", pages_crawled)
-    print("Duplicate links encountered:", duplicate_count)
-    print(f"Total time: {total_time:.2f} sec")
-    print(f"Average time per page: {avg_time:.2f} sec")
-    
-    # Save visited URLs to a file
-    visited_file = "visited.txt"
-    with open(visited_file, "w", encoding="utf-8") as f:
-        for v in sorted(visited):
-            f.write(v + "\n")
-    print(f"[INFO] Saved visited URLs to {visited_file}")
+    channel.queue_declare(queue="url_queue", durable=True) # declare a durable queue
+    channel.basic_qos(prefetch_count=1) # fair dispatch
+
+    channel.basic_consume( # consume messages from the queue
+        queue="url_queue",
+        on_message_callback=crawl_url_worker
+    )
+
+    print(f"[*] Worker-{worker_id} started. Waiting for URLs...")
+    channel.start_consuming() # start consuming messages
+
+# --------------------------------------------------
+# PRODUCER (REAL WEBSITE SEEDING)
+# --------------------------------------------------
+
+def seed_urls():
+    """
+    Sends real website URLs to RabbitMQ.
+    This simulates the URL Producer.
+    """
+
+    connection = pika.BlockingConnection( # connect to RabbitMQ server
+        pika.ConnectionParameters(host="localhost") # specify host
+    )
+    channel = connection.channel() # create a channel
+
+    channel.queue_declare(queue="url_queue", durable=True) # declare a durable queue
+
+    seed_url = "https://en.wikipedia.org/wiki/Infosys" # real website URL
+
+    channel.basic_publish( # publish the seed URL to the queue
+        exchange="",
+        routing_key="url_queue",
+        body=seed_url.encode() # encode the URL to bytes for transmission via RabbitMQ
+    )
+
+    print(f"[PRODUCER] Seed URL sent: {seed_url}")
+    connection.close()
+
+# --------------------------------------------------
+# TASK 4: MULTIPLE WORKER SIMULATION
+# --------------------------------------------------
+
+def main():
+    """
+    Starts multiple worker processes locally
+    and seeds the queue with a real website.
+    """
+
+    # Step 1: Seed real website URL
+    seed_urls()
+
+    # Step 2: Start multiple workers
+    NUM_WORKERS = 3
+    processes = []
+
+    for i in range(1, NUM_WORKERS + 1):
+        p = multiprocessing.Process( # create a new process
+            target=worker_function,
+            args=(i,)
+        )
+        p.start() # start the process
+        processes.append(p) # keep track of processes
+
+    for p in processes: # wait for all processes to finish
+        p.join()
 
 
 if __name__ == "__main__":
     main()
-    
-
