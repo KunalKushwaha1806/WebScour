@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebScour Search</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>🔍 WebScour Search Engine</h1>
+
+    <form method="POST">
+        <input type="text" name="query" placeholder="Search here..." value="{{ query }}" required>
+        <button type="submit">Search</button>
+    </form>
+
+    {% if results %}
+    <div class="results">
+        <h2>Results</h2>
+        <ul>
+            {% for doc, score in results %}
+            <li>
+                <strong>{{ doc }}</strong>
+                <span>Score: {{ "%.4f"|format(score) }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>
