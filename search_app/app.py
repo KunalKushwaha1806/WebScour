@@ -268,6 +268,19 @@ def favicon():
     return "", 204
 
 
+@app.route("/static/<path:filename>")
+@app.route("/api/static/<path:filename>")
+@app.route("/api/index.py/static/<path:filename>")
+def serve_static(filename):
+    return send_from_directory(STATIC_DIR, filename)
+
+
+@app.route("/style.css")
+def serve_root_style():
+    return send_from_directory(STATIC_DIR, "style.css")
+
+
+
 
 # -----------------------------
 # RUN SERVER
