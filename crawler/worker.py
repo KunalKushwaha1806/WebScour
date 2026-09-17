@@ -17,6 +17,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 QUEUE_NAME = "url_queue"
 PAGES_DIR = os.path.join(BASE_DIR, "pages")
 VISITED_FILE = os.path.join(BASE_DIR, "visited.txt")
+INDEXER_METADATA = os.path.join(BASE_DIR, "indexer", "metadata.json")
 FOLDER_NAME = PAGES_DIR
 
 file_lock = Lock()
@@ -32,7 +33,7 @@ if not os.path.exists(VISITED_FILE):
     open(VISITED_FILE, "w").close()
 
 # -------------------------------
-# VISITED FILE HELPERS
+# VISITED & METADATA HELPERS
 # -------------------------------
 def is_visited(url):
     with file_lock:
@@ -43,6 +44,44 @@ def mark_visited(url):
     with file_lock:
         with open(VISITED_FILE, "a", encoding="utf-8") as f:
             f.write(url + "\n")
+
+def record_page_metadata(filename, url, html):
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        title_tag = soup.find("title")
+        full_title = title_tag.get_text(strip=True) if title_tag else filename
+        clean_title = full_title.replace(" - Wikipedia", "").strip() or filename
+        
+        snippet = ""
+        for p in soup.find_all("p"):
+            p_text = p.get_text(strip=True)
+            if len(p_text) > 40:
+                snippet = p_text[:240] + ("..." if len(p_text) > 240 else "")
+                break
+
+        entry = {
+            "title": clean_title,
+            "full_title": full_title,
+            "url": url,
+            "snippet": snippet,
+            "doc_id": filename
+        }
+
+        with file_lock:
+            metadata_data = {}
+            if os.path.exists(INDEXER_METADATA):
+                try:
+                    import json
+                    with open(INDEXER_METADATA, "r", encoding="utf-8") as mf:
+                        metadata_data = json.load(mf)
+                except Exception:
+                    metadata_data = {}
+            metadata_data[filename] = entry
+            with open(INDEXER_METADATA, "w", encoding="utf-8") as mf:
+                import json
+                json.dump(metadata_data, mf, indent=2)
+    except Exception:
+        pass
 
 # -------------------------------
 # FETCH PAGE
@@ -147,6 +186,7 @@ def worker_process(worker_id):
             f.write(html)
 
         print(f"[WORKER-{worker_id}] Saved → {filename}")
+        record_page_metadata(filename, url, html)
 
         links = extract_links(html, url)
         domain = urlparse(url).netloc

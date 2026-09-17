@@ -1,340 +1,202 @@
-# 🕷️ WebScour – Web Crawler Using Python
+# 🕷️ WebScour – Distributed Web Crawler & Search Engine
 
-WebScour is a **Python-based web crawler** developed as part of my **Infosys Virtual Internship Program**.  
-The project focuses on **automated information discovery**, **web page collection**, and building a strong foundation for a **search engine pipeline**.
+WebScour is an end-to-end, high-performance **Python-based distributed web crawler and search engine** developed as part of the **Infosys Virtual Internship Program**.
 
----
-
-## 📌 Project Overview
-
-The internet contains a massive amount of information, making manual data collection inefficient and impractical.  
-WebScour solves this problem by **automatically discovering, crawling, and storing web pages** starting from a given seed URL.
-
-The crawler follows a **FIFO (queue-based) approach**, avoids duplicate visits, filters invalid links, restricts crawling to the same domain, and stores downloaded pages locally for further processing and searching.
+The project implements the complete search engine lifecycle:
+$$\textbf{Seed URLs} \longrightarrow \textbf{Distributed Crawling (RabbitMQ)} \longrightarrow \textbf{HTML Storage} \longrightarrow \textbf{Inverted Indexing (TF-IDF)} \longrightarrow \textbf{Search Engine Web App (Flask)}$$
 
 ---
 
-## ❓ What Problem Does WebScour Solve?
+## 📌 Implementation Status
 
-### Challenges on the Web
-- Huge amount of information available online
-- Manual discovery and collection of pages is time-consuming
-- Difficulty in organizing and searching collected data
-
-### WebScour Solution
-WebScour automates this process by:
-- Crawling selected websites
-- Collecting and storing page content
-- Preparing data for indexing and searching
-
----
-
-## 🔍 Web Crawling Pipeline
-
-WebScour is designed based on the standard **search engine workflow**:
-
-**Crawling → Collecting → Indexing → Searching**
-
-### 1️⃣ Crawling
-- Starts from a **seed URL**
-- Downloads the web page
-- Extracts hyperlinks
-- Discovers new pages recursively
-- Avoids duplicate URLs
-- Restricts crawling to the same domain
-
-### 2️⃣ Collecting
-- Stores downloaded HTML pages locally
-- Creates a structured dataset for future processing
-
-### 3️⃣ Indexing *(Future Scope)*
-- Organizes collected content
-- Builds keyword-based indexes for fast searching
-
-### 4️⃣ Searching *(Future Scope)*
-- Allows users to search indexed content
-- Forms the final layer of a search engine
-
-**Current Implementation Status:**
-- ✔ Crawling
-- ✔ Collecting
-- ❌ Indexing (future enhancement)
-- ❌ Searching (future enhancement)
-
----
-
-## 🎯 Main Focus of the Web Crawler
-
-The WebScour crawler primarily focuses on:
-
-### 🔹 Information Discovery
-Automatically finding new web pages through hyperlinks.
-
-### 🔹 Automation
-Removing manual effort by automatically fetching, filtering, and storing pages.
-
-### 🔹 Search Enablement
-Preparing clean and structured data that can later be indexed and searched.
+| Component | Status | Details |
+| :--- | :---: | :--- |
+| **1. Crawling** | ✅ Completed | Distributed multi-process workers via RabbitMQ (`pika`), retry logic, same-domain filter |
+| **2. Collecting** | ✅ Completed | Local HTML storage, UUID mapping, automatic metadata extraction (titles, canonical URLs) |
+| **3. Indexing** | ✅ Completed | HTML cleaning, tokenization, stopword filtering, inverted index, smooth TF-IDF computation |
+| **4. Searching** | ✅ Completed | Modern Flask UI, TF-IDF ranking with title boost, keyword snippet highlighting, dark/light mode |
 
 ---
 
 ## 🏗️ System Architecture
 
-The architecture of WebScour follows real-world search engine design:
+```mermaid
+graph TD
+    subgraph Crawling Stage
+        P[crawler/producer.py] -->|Seed URLs| RMQ[(RabbitMQ url_queue)]
+        RMQ --> W1[Worker 1]
+        RMQ --> W2[Worker 2]
+        RMQ --> W3[Worker 3]
+        W1 & W2 & W3 -->|Discovered URLs| RMQ
+    end
 
-**Seed URL --> Web Crawler --> Page Storage --> Indexer -->Search Engine**
+    subgraph Storage & Metadata
+        W1 & W2 & W3 -->|Save HTML| PDIR[pages/ *.html]
+        W1 & W2 & W3 -->|Record Visited| VF[visited.txt]
+        W1 & W2 & W3 -->|Extract Metadata| MD[indexer/metadata.json]
+    end
 
-### Component Description
+    subgraph Indexing Engine
+        PDIR --> IDX[indexer/page_indexer.py]
+        IDX --> II[indexer/inverted_index.json]
+        IDX --> IDF[indexer/idf.json]
+        IDX --> MD
+    end
 
-**Seed URL**  
-The starting point of the crawl that defines the scope.
-
-**Web Crawler**  
-- Fetches web pages
-- Handles retries on failure
-- Extracts and filters links
-- Avoids duplicate crawling
-- Enforces same-domain restriction
-
-**Page Storage**  
-- Saves HTML pages locally
-- Maintains crawled data for analysis
-
-**Indexer (Future Scope)**  
-- Converts pages into searchable data
-
-**Search Engine (Future Scope)**  
-- Provides keyword-based search functionality
-
----
-
-## 🧰 Tech Stack – Python Focused
-
-### Programming Language
-- Python 3
-
-### Core Python Concepts Used
-- Functions and modules
-- Data structures:
-  - `list` (queue)
-  - `set` (visited URLs)
-- File handling
-- Exception handling
-- Retry logic
-
-### Libraries and Tools
-- **Requests** – HTTP requests
-- **BeautifulSoup** – HTML parsing
-- **OS module** – file and directory handling
-- **Time module** – delays and performance tracking
-- **urllib.parse** – URL normalization and domain extraction
-
----
-
-## ⚙️ How the Crawler Works
-
-1. Initialize a queue with a seed URL  
-2. Fetch the webpage content  
-3. Save the HTML page locally  
-4. Extract valid HTTP/HTTPS links  
-5. Filter invalid links (`mailto`, `javascript`, `tel`, `#`)  
-6. Restrict crawling to the same domain  
-7. Avoid duplicate URLs using a visited set  
-8. Retry failed requests (limited attempts)  
-9. Repeat until the maximum page limit is reached  
-
----
-
-## ✨ Features Implemented
-
-- FIFO queue-based crawling
-- Same-domain crawling only
-- Duplicate URL prevention
-- Invalid link filtering
-- Retry logic for failed URLs
-- Politeness delay (0.5 seconds)
-- Local storage of HTML pages
-- Performance measurement (time & average speed)
-- Logging of visited URLs
-
----
-
-### Component Description
-
-- **Seed URL** – Starting point of the crawl  
-- **Web Crawler** – Fetches pages, extracts links, filters URLs, avoids duplicates  
-- **Page Storage** – Stores HTML pages locally  
-- **Indexer** *(Future)* – Builds searchable indexes  
-- **Search Engine** *(Future)* – Provides query-based search  
+    subgraph Search Web Application
+        II & IDF & MD --> FLASK[search_app/app.py]
+        USER[Web Browser] <-->|Search Query / Cached View| FLASK
+        FLASK -->|Render UI & Snippets| UI[templates/index.html & style.css]
+    end
+```
 
 ---
 
 ## 🧰 Tech Stack
 
-- **Language**: Python 3  
-- **Libraries**:
-  - Requests (HTTP requests)
-  - BeautifulSoup (HTML parsing)
-  - OS (file handling)
-  - Time (delay and performance)
-  - urllib.parse (URL handling)
+- **Core Language**: Python 3.10+
+- **Message Broker**: RabbitMQ & `pika` (Distributed task queue)
+- **Web Scraping & Extraction**: `requests`, `beautifulsoup4`, `urllib.parse`
+- **Concurrency**: Python `multiprocessing` with inter-process synchronization locks
+- **Information Retrieval**:
+  - Inverted Index (`inverted_index.json`)
+  - Term Frequency & Inverse Document Frequency (Smooth TF-IDF)
+  - Stopword filtering and title-match boosting
+- **Web Application**: Flask (Python web microframework)
+- **Frontend & Styling**: Modern Vanilla CSS, responsive design, CSS custom property themes (Dark & Light mode), and Google Fonts (`Plus Jakarta Sans` & `JetBrains Mono`).
 
 ---
 
-## ⚙️ How the Crawler Works
-
-1. Initialize queue with seed URL  
-2. Fetch webpage content  
-3. Save HTML locally  
-4. Extract valid HTTP/HTTPS links  
-5. Filter invalid links (`mailto`, `javascript`, `tel`, `#`)  
-6. Restrict crawling to same domain  
-7. Avoid duplicate URLs  
-8. Retry failed requests  
-9. Stop when page limit is reached  
-
----
-
-## ✨ Features Implemented
-
-- FIFO queue-based crawling  
-- Same-domain crawling only  
-- Duplicate URL prevention  
-- Invalid link filtering  
-- Retry logic for failed URLs  
-- Politeness delay (0.5 seconds)  
-- Local storage of pages  
-- Performance measurement  
-- Visited URL logging  
-
----
-
-## 📁 Project Structure
-
-The WebScour project follows a simple and well-organized directory structure.
+## 📁 Directory Structure
 
 ```bash
-webscour/
-├── crawler.py          # Main Python script that implements the web crawler
-├── pages/              # Directory containing downloaded HTML pages
-│   ├── page_1.html     # Crawled webpage (example)
-│   ├── page_2.html
-│   └── ...
-├── visited.txt         # Text file storing all visited URLs
-└── README.md           # Project documentation
+WebScour/
+├── crawler/
+│   ├── producer.py          # Enqueues initial seed URLs into RabbitMQ
+│   └── worker.py            # Multi-process crawler workers consuming from RabbitMQ
+├── indexer/
+│   ├── page_indexer.py      # Parses HTML, extracts metadata, builds inverted index & TF-IDF
+│   ├── inverted_index.json  # Vocabulary posting lists with term frequencies
+│   ├── idf.json             # Inverse Document Frequency weights
+│   └── metadata.json        # Maps doc IDs to titles, canonical URLs, and excerpts
+├── pages/                   # Storage directory for downloaded raw HTML snapshots
+├── search_app/
+│   ├── app.py               # Flask application with TF-IDF search, snippet generator, and view cache
+│   ├── static/
+│   │   └── style.css        # Modern, responsive stylesheet with dark/light mode
+│   └── templates/
+│       └── index.html       # Search UI template with query metrics and cached snapshots
+├── visited.txt              # Deduplication registry of visited URLs
+├── milestone1.pdf           # Internship milestone documentation
+└── README.md                # Project documentation
 ```
-
-### Description
-
-- **crawler.py** – Contains the complete crawler logic  
-- **pages/** – Stores downloaded web pages  
-- **visited.txt** – Maintains record of visited URLs  
-- **README.md** – Explains the project  
 
 ---
 
-## ▶️ How to Run the Project
+## ⚙️ How It Works
+
+### 1. Distributed Crawling (`crawler/`)
+- `producer.py` initializes a durable queue `url_queue` on RabbitMQ and publishes initial seed URLs (e.g. Wikipedia articles).
+- `worker.py` spawns multiple worker processes (configurable, default: 3).
+- Each worker:
+  - Fetches the assigned URL with custom User-Agent and up to 3 retries.
+  - Generates a unique UUID and saves the raw HTML in `pages/`.
+  - Extracts metadata (page title, canonical URL, first paragraph excerpt) and records it to `indexer/metadata.json`.
+  - Normalizes hyperlinks, filters out invalid schemes (`mailto:`, `javascript:`, `#`, `tel:`), enforces **same-domain restrictions**, checks `visited.txt` with process locks, and publishes newly discovered URLs back to RabbitMQ.
+
+### 2. Text Processing & Inverted Indexing (`indexer/`)
+- `page_indexer.py` iterates through all stored HTML pages in `pages/`.
+- Decomposes non-content tags (`<script>`, `<style>`, `<noscript>`).
+- Normalizes punctuation, lowercases tokens, and removes English stopwords.
+- Computes **Term Frequency (TF)** for each document and builds the **Inverted Index**:
+  $$\text{inverted\_index}[\text{term}] = [[\text{doc\_id}, \text{tf}], \dots]$$
+- Computes **Smooth Inverse Document Frequency (IDF)**:
+  $$\text{IDF}(t) = \ln\left(\frac{N + 1}{\text{DF}(t) + 1}\right) + 1.0$$
+- Writes `inverted_index.json`, `idf.json`, and `metadata.json` to disk.
+
+### 3. Search Application (`search_app/`)
+- Loads inverted index, IDF tables, and document metadata into memory on startup.
+- Computes relevance score:
+  $$\text{Score}(D, Q) = \sum_{t \in Q} \text{TF}(t, D) \times \text{IDF}(t) \times \text{Boost}_{\text{title}}$$
+- Generates dynamic excerpts with `<mark>` tags around matching query terms.
+- Serves:
+  - `GET /` — Search home page & query interface.
+  - `GET /?q=...` — Search results with query response time in milliseconds.
+  - `GET /view/<doc_id>` — Cached snapshot viewer of any crawled document.
+  - `GET /api/search?q=...` — Programmatic JSON API endpoint.
+
+---
+
+## ▶️ Setup & Execution Guide
 
 ### Step 1: Install Dependencies
 ```bash
-pip install requests beautifulsoup4
+pip install requests beautifulsoup4 pika Flask
 ```
-Step 2: Run the Crawler
+
+### Step 2: Set Up & Start RabbitMQ
+Make sure RabbitMQ is running on your system (see the RabbitMQ Setup section below).
+
+### Step 3: Run the Crawler
+In separate terminal windows:
 ```bash
-python crawler.py
-```
-# WebScour – Web Crawler Using Python
+# Terminal 1: Seed initial URLs into RabbitMQ
+python crawler/producer.py
 
-A simple yet efficient web crawler built with Python that downloads web pages, extracts links, and stores them systematically.
-
-## ⚙️ Configuration
-
-The behavior of the WebScour crawler can be customized by modifying the following variables in the `crawler.py` file.
-
-### 🔗 Seed URL
-Defines the starting point of the crawl.
-
-```python
-seed_url = "https://en.wikipedia.org/wiki/Infosys"
+# Terminal 2: Start multi-process crawling workers
+python crawler/worker.py
 ```
 
-### 📄 Maximum Pages
-Controls how many pages the crawler is allowed to download.
-
-```python
-MAX_PAGES = 5
+### Step 4: Index the Crawled Pages
+Once pages are collected in `pages/`, generate the inverted index and metadata:
+```bash
+python indexer/page_indexer.py
 ```
 
-This limit helps prevent excessive crawling and avoids overloading target websites.
+### Step 5: Launch the Search Web Interface
+```bash
+python search_app/app.py
+```
+Open your browser and navigate to:
+```
+http://127.0.0.1:5000
+```
 
-### ⏳ Politeness Delay
-A delay of 0.5 seconds is applied between successive HTTP requests to reduce server load and promote ethical crawling. This value can be adjusted if required.
+---
 
-## 📊 Output
+## 🐇 RabbitMQ Setup Guide for Windows
 
-After execution, the crawler generates the following outputs:
+RabbitMQ requires **Erlang/OTP** and the **RabbitMQ Server**.
 
-### 🗂 Downloaded Pages
-- All successfully crawled HTML pages are stored in the `pages/` directory
-- Each page is saved with a unique filename (e.g., `page_1.html`, `page_2.html`)
+### Method 1: Using Chocolatey (Recommended - Fastest)
+If you have Chocolatey installed, run PowerShell as Administrator:
+```powershell
+choco install erlang -y
+choco install rabbitmq -y
+```
 
-### 🧾 Visited URLs File
-- All unique URLs visited during the crawl are stored in `visited.txt`
-- This file helps verify duplicate prevention and crawl coverage
+### Method 2: Manual Installer
+1. **Download and install Erlang/OTP (64-bit)**:
+   - [Erlang Official Downloads](https://www.erlang.org/patches/otp-26.2.2) (Install first as Administrator).
+2. **Download and install RabbitMQ Server**:
+   - [RabbitMQ Windows Installer (.exe)](https://github.com/rabbitmq/rabbitmq-server/releases)
+3. **Enable RabbitMQ Management Web Dashboard**:
+   Open Command Prompt / PowerShell as Administrator and run:
+   ```cmd
+   cd "C:\Program Files\RabbitMQ Server\rabbitmq_server-*\sbin"
+   rabbitmq-plugins enable rabbitmq_management
+   ```
+4. **Start the RabbitMQ Service**:
+   ```cmd
+   rabbitmq-service start
+   ```
+5. Open `http://localhost:15672` in your browser. Default login: `guest` / `guest`.
 
-### 💻 Console Output
-The terminal displays important crawling statistics, including:
-- Total number of pages crawled
-- Number of duplicate links encountered
-- Total crawling time
-- Average time taken per page
+---
 
-## ⚠️ Limitations
-
-Although WebScour works efficiently for small to medium-sized websites, it has the following limitations:
-- Crawls only static HTML pages
-- Does not execute JavaScript
-- Uses a single-threaded crawling approach
-- Does not currently respect `robots.txt`
-- Not suitable for very large-scale web crawling
-
-## 🚀 Future Enhancements
-
-The project can be extended with the following features:
-- Implement multi-threaded crawling for better performance
-- Add `robots.txt` compliance for ethical crawling
-- Introduce depth-based crawling control
-- Store crawled data in a database
-- Implement indexing of collected pages
-- Build a keyword-based search engine
-- Create a web interface using Flask or similar frameworks
-
-## 🎓 Learning Outcomes
-
-Through this project, the following concepts were learned and applied:
-- Web crawler architecture and workflow
-- Search engine pipeline (crawling → collecting → indexing → searching)
-- Use of Python data structures such as queues and sets
-- Handling HTTP requests and responses
-- Parsing HTML using BeautifulSoup
-- Error handling and retry mechanisms
-- File and directory management
-- Writing clean, maintainable, and well-documented code
-
-## 🧾 Internship Information
+## 🎓 Internship Project Information
 
 - **Program:** Infosys Virtual Internship
-- **Project Title:** WebScour – Web Crawler Using Python
-- **Domain:** Python / Web Technologies
+- **Project Title:** WebScour – Distributed Web Crawler & Search Engine
+- **Domain:** Python / Web Technologies / Information Retrieval
 - **Author:** Kunal Kushwaha
-
-## 📚 References
-
-- [Python Official Documentation](https://docs.python.org/)
-- [Requests Library Documentation](https://requests.readthedocs.io/)
-- [BeautifulSoup Documentation](https://www.crummy.com/software/BeautifulSoup/bs4/doc/)
-- Wikipedia (used for testing purposes)
-
-
-
-

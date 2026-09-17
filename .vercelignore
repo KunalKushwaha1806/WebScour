@@ -1,0 +1,9 @@
+__pycache__
+.git
+*.pyc
+milestone1.pdf
+crawler/
+indexer/page_indexer.py
+visited.txt
+.env
+node_modules

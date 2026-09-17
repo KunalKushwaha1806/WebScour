@@ -1,0 +1,18 @@
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.py"
+    }
+  ],
+  "functions": {
+    "api/index.py": {
+      "includeFiles": [
+        "search_app/**",
+        "indexer/*.json",
+        "pages/**"
+      ],
+      "maxDuration": 15
+    }
+  }
+}
