@@ -18,5 +18,37 @@ os.environ["VERCEL"] = "1"
 # Import the Flask app
 from search_app.app import app
 
-# Vercel looks for an `app` variable (WSGI-compatible) in this module.
-# The import above already exposes it.
+
+class VercelPathFixMiddleware:
+    """
+    Normalizes PATH_INFO when Vercel rewrites requests to /api/index.py.
+    Ensures that Flask routes matched to '/', '/view/...', '/api/search',
+    and '/static/...' resolve correctly regardless of proxy prefixes.
+    """
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO", "")
+
+        # Use matched path from Vercel header if available and valid
+        matched = environ.get("HTTP_X_MATCHED_PATH")
+        if matched and not matched.startswith("/api/index"):
+            environ["PATH_INFO"] = matched
+            path = matched
+
+        for prefix in ("/api/index.py", "/api/index", "/api"):
+            if path == prefix or path == f"{prefix}/":
+                environ["PATH_INFO"] = "/"
+                break
+            elif path.startswith(f"{prefix}/"):
+                subpath = path[len(prefix):]
+                environ["PATH_INFO"] = subpath
+                break
+
+        return self.wsgi_app(environ, start_response)
+
+
+# Apply WSGI middleware
+app.wsgi_app = VercelPathFixMiddleware(app.wsgi_app)
+

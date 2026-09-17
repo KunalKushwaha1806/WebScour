@@ -204,6 +204,10 @@ def search(query, top_k=10):
 # ROUTES
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
+@app.route("/api", methods=["GET", "POST"])
+@app.route("/api/", methods=["GET", "POST"])
+@app.route("/api/index", methods=["GET", "POST"])
+@app.route("/api/index.py", methods=["GET", "POST"])
 def home():
     query = ""
     results = []
@@ -229,6 +233,8 @@ def home():
 
 
 @app.route("/view/<path:doc_id>")
+@app.route("/api/view/<path:doc_id>")
+@app.route("/api/index.py/view/<path:doc_id>")
 def view_cached_page(doc_id):
     """
     Safely serves the crawled snapshot HTML file.
@@ -240,6 +246,8 @@ def view_cached_page(doc_id):
 
 
 @app.route("/api/search")
+@app.route("/search")
+@app.route("/api/index.py/api/search")
 def api_search():
     """
     REST API endpoint for programmatic search queries.
@@ -253,6 +261,12 @@ def api_search():
         "time_ms": elapsed_ms,
         "results": results
     }
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return "", 204
+
 
 
 # -----------------------------
