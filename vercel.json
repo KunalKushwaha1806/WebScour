@@ -7,11 +7,7 @@
   ],
   "functions": {
     "api/index.py": {
-      "includeFiles": [
-        "search_app/**",
-        "indexer/*.json",
-        "pages/**"
-      ],
+      "includeFiles": "{search_app/**,indexer/*.json,pages/**}",
       "maxDuration": 15
     }
   }
